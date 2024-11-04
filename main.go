@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"strings"
 )
 
 type DNSMessage struct {
@@ -49,6 +50,25 @@ func writeToBuff(buffer *bytes.Buffer, data any) error {
 	return binary.Write(buffer, binary.BigEndian, data)
 }
 
+func domainToBuffer(domain string) []byte {
+	parts := strings.Split(domain, ".")
+
+	var domainBuf bytes.Buffer
+
+	for _, part := range parts {
+		if err := binary.Write(&domainBuf, binary.BigEndian, uint16(len(part))); err != nil {
+			fmt.Println("Error writing length: ", err)
+			return nil
+		}
+		if _, err := domainBuf.WriteString(part); err != nil {
+			fmt.Println("Error writing string: ", err)
+			return nil
+		}
+	}
+
+	return domainBuf.Bytes()
+}
+
 func convertStructToBinary(dm *DNSMessage) ([]byte, error) {
 	buf := new(bytes.Buffer)
 
@@ -56,7 +76,7 @@ func convertStructToBinary(dm *DNSMessage) ([]byte, error) {
 		return nil, fmt.Errorf("error writing ID: %v", err)
 	}
 
-	if err := writeToBuff(buf, []byte(dm.question.QNAME)); err != nil {
+	if err := writeToBuff(buf, domainToBuffer(dm.question.QNAME)); err != nil {
 		return nil, fmt.Errorf("error writing QR: %v", err)
 	}
 
