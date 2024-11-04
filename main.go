@@ -3,14 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"net"
 )
 
 type DNSMessage struct {
-	header   Header
-	question Question
+	header   *Header
+	question *Question
 }
 
 type Header struct {
@@ -30,7 +29,7 @@ type Question struct {
 
 func NewDNSMessage(domain string) *DNSMessage {
 	return &DNSMessage{
-		header: Header{
+		header: &Header{
 			ID:      22,
 			Flags:   1 << 7,
 			QDCOUNT: 1,
@@ -38,7 +37,7 @@ func NewDNSMessage(domain string) *DNSMessage {
 			NSCOUNT: 0,
 			ARCOUNT: 0,
 		},
-		question: Question{
+		question: &Question{
 			QNAME:  domain,
 			QTYPE:  1,
 			QCLASS: 1,
@@ -72,15 +71,52 @@ func convertStructToBinary(dm *DNSMessage) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func parseDNSMessage(message []byte) (*DNSMessage, error) {
+	var header Header
+	var question Question
+
+	// header section
+
+	if err := binary.Read(bytes.NewReader(message[:12]), binary.BigEndian, &header); err != nil {
+		return nil, fmt.Errorf("error writing binary %v", err)
+	}
+
+	// question section
+	start := 12
+	var qnameBuf bytes.Buffer
+
+	for {
+		if message[start] == 0 {
+			break
+		}
+		qnameBuf.WriteByte(message[start])
+
+		start += 1
+	}
+
+	question.QNAME = qnameBuf.String()
+
+	question.QTYPE = binary.BigEndian.Uint16(message[start : start+2])
+
+	start += 2
+
+	question.QCLASS = binary.BigEndian.Uint16(message[start : start+2])
+
+	return &DNSMessage{header: &header, question: &question}, nil
+}
+
 func main() {
 	message := NewDNSMessage("dns.google.com")
 	test, err := convertStructToBinary(message)
+
+	fmt.Println(*message.header, *message.question)
+	hai, err := parseDNSMessage(test)
+	fmt.Println(*hai.header, *hai.question)
 	if err != nil {
 		fmt.Errorf("error convert struct to hex: %v", err)
 		return
 	}
 
-	fmt.Println(hex.EncodeToString(test))
 	conn, err := net.Dial("udp", "8.8.8.8:53")
 	if err != nil {
 		fmt.Println("Error creating udp connection", err)
@@ -97,7 +133,11 @@ func main() {
 		return
 	}
 
+	var buf bytes.Buffer
+
+	binary.Write(&buf, binary.BigEndian, res)
+
 	responseId := binary.BigEndian.Uint16(res[:2])
 	requestId := binary.BigEndian.Uint16(test[:2])
-	fmt.Println(responseId, requestId)
+	fmt.Println(responseId, requestId, string(res))
 }
