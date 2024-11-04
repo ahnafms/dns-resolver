@@ -129,7 +129,9 @@ func parseDNSMessage(message []byte) (*DNSMessage, error) {
 func main() {
 	message := NewDNSMessage("dns.google.com")
 	test, err := convertStructToBinary(message)
+
 	fmt.Println(hex.EncodeToString(test))
+
 	if err != nil {
 		fmt.Errorf("error convert struct to hex: %v", err)
 		return
