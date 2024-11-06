@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"strings"
@@ -33,7 +32,7 @@ func NewDNSMessage(domain string) *DNSMessage {
 	return &DNSMessage{
 		header: &Header{
 			ID:      22,
-			Flags:   1 << 7,
+			Flags:   1 << 8,
 			QDCOUNT: 1,
 			ANCOUNT: 0,
 			NSCOUNT: 0,
@@ -57,7 +56,7 @@ func domainToBuffer(domain string) []byte {
 	var domainBuf bytes.Buffer
 
 	for _, part := range parts {
-		if err := binary.Write(&domainBuf, binary.BigEndian, uint16(len(part))); err != nil {
+		if err := binary.Write(&domainBuf, binary.BigEndian, uint8(len(part))); err != nil {
 			fmt.Println("Error writing length: ", err)
 			return nil
 		}
@@ -66,6 +65,8 @@ func domainToBuffer(domain string) []byte {
 			return nil
 		}
 	}
+
+	domainBuf.Write([]byte{0})
 
 	return domainBuf.Bytes()
 }
@@ -129,9 +130,6 @@ func parseDNSMessage(message []byte) (*DNSMessage, error) {
 func main() {
 	message := NewDNSMessage("dns.google.com")
 	test, err := convertStructToBinary(message)
-
-	fmt.Println(hex.EncodeToString(test))
-
 	if err != nil {
 		fmt.Errorf("error convert struct to hex: %v", err)
 		return
@@ -155,9 +153,12 @@ func main() {
 
 	var buf bytes.Buffer
 
-	binary.Write(&buf, binary.BigEndian, res)
+	err = binary.Write(&buf, binary.BigEndian, res)
+	if err != nil {
+		fmt.Println("Error writing binary", err)
+		return
+	}
 
-	responseId := binary.BigEndian.Uint16(res[:2])
-	requestId := binary.BigEndian.Uint16(test[:2])
-	fmt.Println(responseId, requestId, string(res))
+	fmt.Println(buf)
+	return
 }
